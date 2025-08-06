@@ -10,6 +10,16 @@ This repository contains a backend AI agent built in TypeScript for a 1-day tech
 
 ---
 
+### Current Status & Known Issues
+
+The application is fully functional and deployed. The only known issue is related to the OpenAI API's free-tier rate limiting.
+
+-   **Issue**: On first run or after a new deployment, the server may log `429 You exceeded your current quota` errors. This is due to the initial burst of requests from the RAG system's embedding process.
+-   **Impact**: This can temporarily prevent the agent from providing full, intelligent responses.
+-   **Solution**: This is an operational issue, not a code bug. The known and recommended solution is to add a payment method to the OpenAI account, which upgrades it to a higher rate limit tier and resolves the error immediately.
+
+---
+
 ## 🚀 Core Features
 
 * **🧠 Conversational Memory**: Maintains conversation history on a per-session basis.
