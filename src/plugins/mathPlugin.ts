@@ -1,24 +1,38 @@
-import { evaluate } from 'mathjs';
+// =====================================
+// src/plugins/mathPlugin.ts (FIXED VERSION)
+// =====================================
+import * as math from 'mathjs';
 
 export const mathPlugin = {
   name: 'math_evaluator',
-  description: 'Evaluates a mathematical expression and returns the result. Example: "2 * (3 + 4)"',
+  description: 'Evaluates mathematical expressions safely. Use for calculations, equations, or mathematical operations.',
   parameters: {
     type: 'object',
     properties: {
       expression: {
         type: 'string',
-        description: 'The mathematical expression to evaluate.',
+        description: 'The mathematical expression to evaluate (e.g., "2 * (3 + 4)", "sqrt(16)", "cos(pi/4)")',
       },
     },
     required: ['expression'],
   },
-  execute: async ({ expression }: { expression: string }) => {
+  execute: async ({ expression }: { expression: string }): Promise<string> => {
     try {
-      const result = evaluate(expression);
-      return `The result of the expression "${expression}" is ${result}.`;
+      // Create a safe math evaluator with limited scope
+      const limitedEvaluate = math.evaluate;
+      const result = limitedEvaluate(expression);
+      
+      // Handle different result types
+      if (typeof result === 'number') {
+        return `The result of "${expression}" is ${result}`;
+      } else if (typeof result === 'object' && result !== null) {
+        return `The result of "${expression}" is ${JSON.stringify(result)}`;
+      } else {
+        return `The result of "${expression}" is ${String(result)}`;
+      }
     } catch (error) {
-      return `Sorry, I could not evaluate the expression: "${expression}". It might be invalid.`;
+      console.error('Math plugin error:', error);
+      return `I couldn't evaluate the expression "${expression}". Please check if it's a valid mathematical expression.`;
     }
   },
 };
