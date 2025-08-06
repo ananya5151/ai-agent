@@ -21,8 +21,6 @@ This repository contains a backend AI agent built in TypeScript for a 1-day tech
 
 The agent operates on a multi-step orchestration loop designed to enrich the final response with the most relevant information available.
 
-![Diagram of the AI Agent's architecture and data flow](https://i.imgur.com/vHq8S7B.png)
-
 1.  **Receive Request**: The Express server handles `POST /agent/message` requests containing a `session_id` and `message`.
 2.  **Retrieve Memory**: The `SessionManager` loads the recent chat history for the session.
 3.  **Tool Check (LLM Call #1)**: The agent sends the user's message and history to the LLM (OpenAI GPT-3.5-Turbo) along with a list of available plugins. The LLM decides if a tool is needed and returns the function and arguments to call.
