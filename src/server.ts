@@ -1,10 +1,10 @@
 // src/server.ts (FIXED VERSION for Express 4.x)
 import express from 'express';
-import { processMessage } from './agent/agent';
-import { vectorStore } from './rag/vectorStore';
+import { processMessage } from './agent/agent.js';
+import { vectorStore } from './rag/vectorStore.js';
 
-
-console.log("DEBUG: Is the API key loaded?", process.env.OPENAI_API_KEY); // <-- ADD THIS LINE
+// Serve static files from public directory (chat UI)
+import path from 'path';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -13,11 +13,26 @@ const port = process.env.PORT || 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Add CORS headers for development
+// Serve UI
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+// Add CORS with optional whitelist for separate frontend deployments
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const origin = req.headers.origin as string | undefined;
+    const isAllowed = origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin));
+
+    res.header('Vary', 'Origin');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (isAllowed) {
+        res.header('Access-Control-Allow-Origin', origin as string);
+        res.header('Access-Control-Allow-Credentials', 'true');
+    }
 
     if (req.method === 'OPTIONS') {
         res.sendStatus(200);
@@ -60,7 +75,13 @@ app.post('/agent/message', async (req, res) => {
         console.log(`📨 Processing message for session ${session_id}: "${message.substring(0, 100)}..."`);
 
         const startTime = Date.now();
-        const reply = await processMessage(session_id, message);
+        // Overall request timeout so the UI never hangs indefinitely
+        const REQUEST_TIMEOUT_MS = 20000; // 20s
+        const replyPromise = processMessage(session_id, message);
+        const timeoutPromise = new Promise<string>((resolve) => {
+            setTimeout(() => resolve("I'm taking longer than expected. Please try again in a moment."), REQUEST_TIMEOUT_MS);
+        });
+        const reply = await Promise.race([replyPromise, timeoutPromise]);
         const duration = Date.now() - startTime;
 
         console.log(`✅ Response generated in ${duration}ms`);
@@ -111,14 +132,17 @@ const startServer = async () => {
             process.exit(1);
         }
 
-        // Initialize vector store
-        await vectorStore.initialize();
-
+        // Start server first so UI is available immediately
         app.listen(port, () => {
             console.log(`✅ Server is running at http://localhost:${port}`);
             console.log(`📡 API endpoint: POST http://localhost:${port}/agent/message`);
             console.log(`🏥 Health check: GET http://localhost:${port}/`);
         });
+
+        // Initialize vector store in the background (non-blocking)
+        vectorStore.initialize()
+            .then(() => console.log('🧩 Vector store ready.'))
+            .catch((err: unknown) => console.error('Vector store initialization error:', err));
 
     } catch (error) {
         console.error('❌ Failed to start server:', error);

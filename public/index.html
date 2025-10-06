@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>AI Agent Chat</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --user: #0b63d6;
+            --agent: #f1f3f5;
+            --text: #0b1a2b
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text)
+        }
+
+        .wrap {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 900px;
+            margin: 0 auto
+        }
+
+        header {
+            padding: 18px 16px;
+            border-bottom: 1px solid #eef2f7;
+            display: flex;
+            justify-content: space-between;
+            align-items: center
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 16px
+        }
+
+        .session {
+            font-size: 13px;
+            color: #556
+        }
+
+        .chat {
+            flex: 1;
+            overflow: auto;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px
+        }
+
+        .messages {
+            display: flex;
+            flex-direction: column;
+            gap: 10px
+        }
+
+        .msg {
+            max-width: 75%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            line-height: 1.4
+        }
+
+        .msg.agent {
+            align-self: flex-start;
+            background: var(--agent);
+            color: #111;
+            border-top-left-radius: 6px
+        }
+
+        .msg.user {
+            align-self: flex-end;
+            background: var(--user);
+            color: #fff;
+            border-top-right-radius: 6px
+        }
+
+        .meta {
+            font-size: 12px;
+            color: #667;
+            margin-top: 6px
+        }
+
+        form {
+            display: flex;
+            padding: 12px;
+            border-top: 1px solid #eee;
+            gap: 8px
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 15px
+        }
+
+        button {
+            background: var(--user);
+            color: #fff;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer
+        }
+
+        .loading {
+            opacity: 0.8;
+            font-style: italic;
+            color: #333
+        }
+
+        @media (max-width:600px) {
+            .msg {
+                max-width: 92%
+            }
+
+            .wrap {
+                padding: 0 8px
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <header>
+            <h1>AI Agent Chat</h1>
+            <div class="session">Session: <span id="sessionId">-</span></div>
+        </header>
+
+        <div class="chat">
+            <div class="messages" id="messages" aria-live="polite"></div>
+        </div>
+
+        <form id="chatForm">
+            <input id="input" type="text" placeholder="Type your message..." autocomplete="off" />
+            <button id="send">Send</button>
+        </form>
+    </div>
+
+    <script>
+        // Small UUIDv4 generator
+        function uuidv4() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; const v = c == 'x' ? r : (r & 0x3 | 0x8); return v.toString(16) }) }
+
+        const sessionId = localStorage.getItem('ai_agent_session') || uuidv4();
+        localStorage.setItem('ai_agent_session', sessionId);
+        document.getElementById('sessionId').textContent = sessionId;
+
+        const messagesEl = document.getElementById('messages');
+        const inputEl = document.getElementById('input');
+        const form = document.getElementById('chatForm');
+        const sendBtn = document.getElementById('send');
+
+        function appendMessage(text, role) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + (role === 'user' ? 'user' : 'agent');
+            div.innerHTML = '<div>' + text.replace(/\n/g, '<br/>') + '</div>';
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        async function sendMessage(text) {
+            if (!text || !text.trim()) return;
+            appendMessage(text, 'user');
+            inputEl.value = '';
+            sendBtn.disabled = true;
+            const loading = document.createElement('div');
+            loading.className = 'msg agent loading';
+            loading.textContent = 'Thinking...';
+            messagesEl.appendChild(loading);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+
+            try {
+                const res = await fetch('/agent/message', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, message: text })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ error: 'Unexpected error' }));
+                    loading.textContent = err.error || 'Server error';
+                    loading.classList.remove('loading');
+                    return;
+                }
+
+                const data = await res.json();
+                loading.remove();
+                appendMessage(data.reply, 'agent');
+            } catch (e) {
+                loading.textContent = 'Network error. Please try again.';
+                loading.classList.remove('loading');
+            } finally {
+                sendBtn.disabled = false;
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+        }
+
+        form.addEventListener('submit', e => { e.preventDefault(); sendMessage(inputEl.value) });
+        inputEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(inputEl.value) } });
+
+        // Optional: welcome message
+        appendMessage('Hello — ask me anything. I can calculate math and fetch weather (try "what is 25 * 4?" or "weather in London").', 'agent');
+    </script>
+</body>
+
+</html>
